@@ -16,6 +16,10 @@ spring:
     port: ${HOOKRELAY_RABBIT_PORT:5672}
     username: ${HOOKRELAY_RABBIT_USER:guest}
     password: ${HOOKRELAY_RABBIT_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
 
 hookrelay:
   admin-token: ${HOOKRELAY_ADMIN_TOKEN:}

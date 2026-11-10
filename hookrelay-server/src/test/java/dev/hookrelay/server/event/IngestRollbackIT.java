@@ -12,9 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.web.client.RestClient;
 
+/** Own context because of the spy bean; closed right after so its workers don't linger. */
+@DirtiesContext
 class IngestRollbackIT extends IntegrationTest {
 
     @MockitoSpyBean OutboxRepository outbox;
