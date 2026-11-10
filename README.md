@@ -85,6 +85,8 @@ docker compose up -d --build     # 2 HookRelay instances, MariaDB, RabbitMQ, rec
 Local development: `docker compose -f docker-compose.dev.yml up -d`, then
 `./mvnw -pl hookrelay-server -am spring-boot:run -Dspring-boot.run.profiles=dev`.
 To run the tests, use `./mvnw verify`. It needs Docker; Testcontainers starts MariaDB and RabbitMQ.
+The suite has 179 tests: 85 unit tests and 94 integration tests that run against real MariaDB and
+RabbitMQ, with WireMock standing in for receiver endpoints.
 
 ## API
 
