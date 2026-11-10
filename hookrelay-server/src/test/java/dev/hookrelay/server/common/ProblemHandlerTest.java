@@ -33,6 +33,11 @@ class ProblemHandlerTest {
             throw new ConflictException("duplicate-name", "Name already used");
         }
 
+        @GetMapping("/boom")
+        String boom() {
+            throw new IllegalStateException("secret internals");
+        }
+
         @PostMapping("/validate")
         String validate(@Valid @RequestBody Body body) {
             return "ok";
@@ -65,6 +70,14 @@ class ProblemHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value("https://hookrelay.dev/problems/validation"))
                 .andExpect(jsonPath("$.errors[0].field").value("name"));
+    }
+
+    @Test
+    void unexpectedErrorsAreProblemJsonWithoutInternals() throws Exception {
+        mvc.perform(get("/boom"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.type").value("https://hookrelay.dev/problems/internal-error"))
+                .andExpect(jsonPath("$.detail").value("Internal error"));
     }
 
     @Test

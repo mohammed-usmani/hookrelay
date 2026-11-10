@@ -27,8 +27,8 @@ public class EventType {
 
     private String description;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "json")
+    /** Stored verbatim as text; Hibernate's JSON type would re-encode it as a JSON string. */
+    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
     private String jsonSchema;
 
     @Column(name = "`system`", nullable = false)

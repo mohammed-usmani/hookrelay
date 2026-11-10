@@ -19,6 +19,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ProblemHandler extends ResponseEntityExceptionHandler {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProblemHandler.class);
+
     public static final String TYPE_BASE = "https://hookrelay.dev/problems/";
 
     public static URI type(String slug) {
@@ -29,7 +31,17 @@ public class ProblemHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<ProblemDetail> handleApi(ApiException e) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(e.getStatus()), e.getMessage());
         pd.setType(type(e.getSlug()));
+        e.getProperties().forEach(pd::setProperty);
         return ResponseEntity.status(e.getStatus()).body(pd);
+    }
+
+    /** Anything unexpected: log it with the stack trace, tell the caller nothing internal. */
+    @ExceptionHandler(Exception.class)
+    ResponseEntity<ProblemDetail> handleUnexpected(Exception e) {
+        log.error("Unhandled error", e);
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
+        pd.setType(type("internal-error"));
+        return ResponseEntity.internalServerError().body(pd);
     }
 
     @Override
