@@ -36,13 +36,14 @@ public class DeliveryStateService {
     private final OutboxRepository outbox;
     private final DeliveryDispatcher dispatcher;
     private final RetryPolicy retryPolicy;
+    private final CircuitBreaker circuitBreaker;
     private final HookRelayProperties props;
     private final Clock clock;
 
     DeliveryStateService(DeliveryRepository deliveries, EndpointRepository endpoints, EndpointService endpointService,
                          EventRepository events, AttemptRepository attempts, OutboxRepository outbox,
-                         DeliveryDispatcher dispatcher, RetryPolicy retryPolicy, HookRelayProperties props,
-                         Clock clock) {
+                         DeliveryDispatcher dispatcher, RetryPolicy retryPolicy, CircuitBreaker circuitBreaker,
+                         HookRelayProperties props, Clock clock) {
         this.deliveries = deliveries;
         this.endpoints = endpoints;
         this.endpointService = endpointService;
@@ -51,6 +52,7 @@ public class DeliveryStateService {
         this.outbox = outbox;
         this.dispatcher = dispatcher;
         this.retryPolicy = retryPolicy;
+        this.circuitBreaker = circuitBreaker;
         this.props = props;
         this.clock = clock;
     }
@@ -83,6 +85,20 @@ public class DeliveryStateService {
             d.park(now);
             return Optional.empty();
         }
+        CircuitBreaker.Decision admission = circuitBreaker.admit(e.circuit(), now);
+        if (admission.admission() == CircuitBreaker.Admission.DEFER) {
+            dispatcher.enqueue(d, DelayTier.atLeast(admission.delay())); // not an attempt
+            return Optional.empty();
+        }
+        if (e.getRateLimitPerSec() != null) {
+            OutboundRateLimiter.Slot slot = OutboundRateLimiter.take(e.getRateNextSendAt(), e.getRateLimitPerSec(), now);
+            if (slot.delay().isPresent()) {
+                dispatcher.enqueue(d, DelayTier.atLeast(slot.delay().get())); // not an attempt
+                return Optional.empty();
+            }
+            e.setRateNextSendAt(slot.nextSendAt());
+        }
+        e.setCircuit(admission.next());
         Event event = events.findById(d.getEventId()).orElseThrow();
         if (event.isPayloadPurged()) {
             markDead(d, "payload_purged");
@@ -104,10 +120,13 @@ public class DeliveryStateService {
             return; // someone else (replay, deletion, sweeper) took over meanwhile
         }
         Instant now = Times.now(clock);
+        Endpoint e = endpoints.findForUpdate(c.endpointId()).orElseThrow();
         if (r.succeeded()) {
+            e.setCircuit(circuitBreaker.onSuccess(e.circuit(), now));
             d.recordAttempt(DeliveryStatus.SUCCEEDED, null, now);
             return;
         }
+        e.setCircuit(circuitBreaker.onFailure(e.circuit(), now));
         d.recordAttempt(DeliveryStatus.FAILED_RETRYING, Attempt.truncate(describe(r), 500), now);
         Optional<Duration> delay = retryPolicy.nextDelay(d.getAttemptCount());
         if (delay.isPresent()) {

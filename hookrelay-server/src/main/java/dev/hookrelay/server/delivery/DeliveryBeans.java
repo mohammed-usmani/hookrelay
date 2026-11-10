@@ -21,6 +21,13 @@ class DeliveryBeans {
     }
 
     @Bean
+    CircuitBreaker circuitBreaker(HookRelayProperties props) {
+        // a probe that never reports back (crashed worker) is replaced after the send timeout
+        return new CircuitBreaker(props.circuit().failureThreshold(), props.circuit().cooldowns(),
+                props.delivery().sendTimeout().plusSeconds(1));
+    }
+
+    @Bean
     SimpleRabbitListenerContainerFactory workerContainerFactory(ConnectionFactory cf, HookRelayProperties props) {
         SimpleRabbitListenerContainerFactory f = new SimpleRabbitListenerContainerFactory();
         f.setConnectionFactory(cf);

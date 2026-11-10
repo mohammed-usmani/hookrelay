@@ -29,9 +29,12 @@ class SecurityConfig {
 
     @Bean
     @Order(2)
-    SecurityFilterChain appChain(HttpSecurity http, ApiKeyService keys) throws Exception {
+    SecurityFilterChain appChain(HttpSecurity http, ApiKeyService keys, HookRelayProperties props) throws Exception {
+        ApiKeyAuthFilter auth = new ApiKeyAuthFilter(keys);
         common(http.securityMatcher("/v1/**"))
-                .addFilterBefore(new ApiKeyAuthFilter(keys), AuthorizationFilter.class)
+                .addFilterBefore(auth, AuthorizationFilter.class)
+                .addFilterAfter(new InboundRateLimiter(props.rateLimit().inboundPerSecond(),
+                        props.rateLimit().inboundBurst()), ApiKeyAuthFilter.class)
                 .authorizeHttpRequests(a -> a.anyRequest().hasAuthority("APP"));
         return http.build();
     }

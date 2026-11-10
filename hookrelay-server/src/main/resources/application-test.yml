@@ -15,6 +15,11 @@ hookrelay:
     # compressed so retry tests finish in seconds; production default is 5s,5m,30m,2h,5h,10h,10h
     retry-schedule: 1s,1s,1s,1s,1s,1s,1s
     send-timeout: 3s
+  circuit:
+    cooldowns: 2s,4s,8s
+  rate-limit:
+    inbound-per-second: 20
+    inbound-burst: 40
 
 logging:
   level:

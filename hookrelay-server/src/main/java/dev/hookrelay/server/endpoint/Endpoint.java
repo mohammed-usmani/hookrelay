@@ -37,6 +37,9 @@ public class Endpoint {
 
     private Integer rateLimitPerSec;
 
+    /** Earliest time the next rate-limited send may start (updated under row lock). */
+    private Instant rateNextSendAt;
+
     /** Empty means "all non-system event types". */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "endpoint_event_types", joinColumns = @JoinColumn(name = "endpoint_id"))
@@ -88,6 +91,8 @@ public class Endpoint {
     public String getDescription() { return description; }
     public EndpointStatus getStatus() { return status; }
     public Integer getRateLimitPerSec() { return rateLimitPerSec; }
+    public Instant getRateNextSendAt() { return rateNextSendAt; }
+    public void setRateNextSendAt(Instant at) { this.rateNextSendAt = at; }
     public Set<String> getEventTypes() { return eventTypes; }
     public CircuitState getCircuitState() { return circuitState; }
     public int getConsecutiveFailures() { return consecutiveFailures; }
@@ -112,14 +117,18 @@ public class Endpoint {
         this.updatedAt = now;
     }
 
-    /** Circuit breaker bookkeeping; only {@code CircuitBreaker} should call this. */
-    public void setCircuit(CircuitState state, int consecutiveFailures, Instant openUntil, int level,
-                           Instant lastSuccessAt, Instant firstFailureAt) {
-        this.circuitState = state;
-        this.consecutiveFailures = consecutiveFailures;
-        this.circuitOpenUntil = openUntil;
-        this.circuitLevel = level;
-        this.lastSuccessAt = lastSuccessAt;
-        this.firstFailureAt = firstFailureAt;
+    public Circuit circuit() {
+        return new Circuit(circuitState, consecutiveFailures, circuitOpenUntil, circuitLevel, lastSuccessAt,
+                firstFailureAt);
+    }
+
+    /** Circuit breaker bookkeeping; only the delivery path should call this, under row lock. */
+    public void setCircuit(Circuit c) {
+        this.circuitState = c.state();
+        this.consecutiveFailures = c.failures();
+        this.circuitOpenUntil = c.openUntil();
+        this.circuitLevel = c.level();
+        this.lastSuccessAt = c.lastSuccessAt();
+        this.firstFailureAt = c.firstFailureAt();
     }
 }
