@@ -36,4 +36,29 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Delivery d where d.id = :id")
     Optional<Delivery> findForUpdate(UUID id);
+
+    @Query("""
+            select d from Delivery d
+            where d.applicationId = :appId
+              and (:status is null or d.status = :status)
+              and (:endpointId is null or d.endpointId = :endpointId)
+              and (:eventId is null or d.eventId = :eventId)
+              and (:from is null or d.createdAt >= :from)
+              and (:to is null or d.createdAt < :to)
+              and (:afterCreated is null or d.createdAt < :afterCreated
+                   or (d.createdAt = :afterCreated and d.id < :afterId))
+            order by d.createdAt desc, d.id desc""")
+    java.util.List<Delivery> page(UUID appId, DeliveryStatus status, UUID endpointId, UUID eventId,
+                                  java.time.Instant from, java.time.Instant to,
+                                  java.time.Instant afterCreated, UUID afterId,
+                                  org.springframework.data.domain.Limit limit);
+
+    Optional<Delivery> findByIdAndApplicationId(UUID id, UUID applicationId);
+
+    java.util.List<Delivery> findByEventIdAndApplicationIdOrderByCreatedAt(UUID eventId, UUID applicationId);
+
+    @Query("""
+            select d.status, count(d) from Delivery d
+            where d.endpointId = :endpointId and d.createdAt >= :since group by d.status""")
+    java.util.List<Object[]> countByStatusSince(UUID endpointId, java.time.Instant since);
 }
