@@ -1,5 +1,6 @@
 package dev.hookrelay.server.support;
 
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.mariadb.MariaDBContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Base for integration tests. Containers are started once per JVM and shared by every
@@ -42,11 +44,34 @@ public abstract class IntegrationTest {
         clock.reset();
     }
 
+    protected static final String ADMIN_TOKEN = "test-admin-token";
+
     /** HTTP client against the running app that never throws on 4xx/5xx. */
     protected RestClient client() {
         return RestClient.builder()
                 .baseUrl("http://localhost:" + port)
                 .defaultStatusHandler(status -> true, (req, res) -> { })
                 .build();
+    }
+
+    /** Client authenticated with the given bearer token. */
+    protected RestClient client(String bearer) {
+        return client().mutate().defaultHeader("Authorization", "Bearer " + bearer).build();
+    }
+
+    protected RestClient admin() {
+        return client(ADMIN_TOKEN);
+    }
+
+    /** A fresh application plus an API key for it. */
+    protected record Tenant(String appId, String apiKey) { }
+
+    protected Tenant newTenant() {
+        JsonNode app = admin().post().uri("/v1/admin/applications")
+                .body(Map.of("name", "app-" + System.nanoTime())).retrieve().body(JsonNode.class);
+        String appId = app.at("/id").asString();
+        JsonNode key = admin().post().uri("/v1/admin/applications/{id}/api-keys", appId)
+                .body(Map.of("name", "test")).retrieve().body(JsonNode.class);
+        return new Tenant(appId, key.at("/key").asString());
     }
 }

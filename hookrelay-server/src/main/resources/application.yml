@@ -9,6 +9,8 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
   rabbitmq:
     host: ${HOOKRELAY_RABBIT_HOST:localhost}
     port: ${HOOKRELAY_RABBIT_PORT:5672}
