@@ -39,9 +39,13 @@ public abstract class IntegrationTest {
     @Autowired
     protected MutableClock clock;
 
+    @Autowired
+    protected TestDns dns;
+
     @BeforeEach
-    void resetClock() {
+    void resetClockAndDns() {
         clock.reset();
+        dns.clear();
     }
 
     protected static final String ADMIN_TOKEN = "test-admin-token";

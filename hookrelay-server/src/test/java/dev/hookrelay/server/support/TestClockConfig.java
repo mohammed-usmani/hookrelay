@@ -12,4 +12,10 @@ public class TestClockConfig {
     MutableClock mutableClock() {
         return new MutableClock();
     }
+
+    @Bean
+    @Primary
+    TestDns testDns() {
+        return new TestDns();
+    }
 }

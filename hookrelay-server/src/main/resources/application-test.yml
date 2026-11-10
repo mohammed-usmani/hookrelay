@@ -11,6 +11,10 @@ hookrelay:
     allow-http: true
     # WireMock runs on loopback in the test JVM
     allowed-cidrs: ["127.0.0.1/32"]
+  delivery:
+    # compressed so retry tests finish in seconds; production default is 5s,5m,30m,2h,5h,10h,10h
+    retry-schedule: 1s,1s,1s,1s,1s,1s,1s
+    send-timeout: 3s
 
 logging:
   level:

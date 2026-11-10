@@ -27,5 +27,12 @@ public record HookRelayProperties(
     /** Delivery behaviour. */
     public record Delivery(
             /* Hard deadline for each delivery, counted from creation (or replay). */
-            @DefaultValue("3d") Duration window) { }
+            @DefaultValue("3d") Duration window,
+            /* Waits between attempts; attempts = schedule size + 1. */
+            @DefaultValue("5s,5m,30m,2h,5h,10h,10h") List<Duration> retrySchedule,
+            @DefaultValue("5s") Duration connectTimeout,
+            /* Cap on one whole HTTP exchange. */
+            @DefaultValue("15s") Duration sendTimeout,
+            @DefaultValue("8") int consumerConcurrency,
+            @DefaultValue("10") int prefetch) { }
 }
