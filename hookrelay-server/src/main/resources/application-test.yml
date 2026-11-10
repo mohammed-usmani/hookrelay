@@ -1,0 +1,9 @@
+management:
+  endpoint:
+    health:
+      show-components: always
+
+hookrelay:
+  admin-token: test-admin-token
+  # 32 zero bytes, base64 — test only
+  encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

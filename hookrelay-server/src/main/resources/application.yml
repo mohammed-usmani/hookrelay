@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: hookrelay
+  datasource:
+    url: ${HOOKRELAY_DB_URL:jdbc:mariadb://localhost:3306/hookrelay}
+    username: ${HOOKRELAY_DB_USER:hookrelay}
+    password: ${HOOKRELAY_DB_PASSWORD:hookrelay}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  rabbitmq:
+    host: ${HOOKRELAY_RABBIT_HOST:localhost}
+    port: ${HOOKRELAY_RABBIT_PORT:5672}
+    username: ${HOOKRELAY_RABBIT_USER:guest}
+    password: ${HOOKRELAY_RABBIT_PASSWORD:guest}
+
+hookrelay:
+  admin-token: ${HOOKRELAY_ADMIN_TOKEN:}
+  encryption-key: ${HOOKRELAY_ENCRYPTION_KEY:}
