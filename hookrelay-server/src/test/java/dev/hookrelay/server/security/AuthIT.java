@@ -49,8 +49,14 @@ class AuthIT extends IntegrationTest {
     }
 
     @Test
-    void healthIsOpen() {
+    void actuatorIsNotServedOnTheApiPort() {
         assertThat(client().get().uri("/actuator/health").retrieve().toBodilessEntity()
+                .getStatusCode().value()).isIn(401, 403, 404);
+    }
+
+    @Test
+    void healthIsOpen() {
+        assertThat(management().get().uri("/actuator/health").retrieve().toBodilessEntity()
                 .getStatusCode().value()).isEqualTo(200);
     }
 }

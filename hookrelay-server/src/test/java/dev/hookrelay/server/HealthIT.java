@@ -10,7 +10,7 @@ class HealthIT extends IntegrationTest {
 
     @Test
     void healthReportsDbAndRabbitUp() {
-        JsonNode body = client().get().uri("/actuator/health").retrieve().body(JsonNode.class);
+        JsonNode body = management().get().uri("/actuator/health").retrieve().body(JsonNode.class);
         assertThat(body.at("/status").asString()).isEqualTo("UP");
         assertThat(body.at("/components/db/status").asString()).isEqualTo("UP");
         assertThat(body.at("/components/rabbit/status").asString()).isEqualTo("UP");

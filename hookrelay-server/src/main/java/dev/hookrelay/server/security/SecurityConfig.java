@@ -43,7 +43,7 @@ class SecurityConfig {
     @Order(3)
     SecurityFilterChain publicChain(HttpSecurity http) throws Exception {
         common(http).authorizeHttpRequests(a -> a
-                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus",
                         "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/error")
                 .permitAll()
                 .anyRequest().denyAll());

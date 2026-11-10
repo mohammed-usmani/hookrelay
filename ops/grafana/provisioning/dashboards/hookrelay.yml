@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: hookrelay
+    folder: HookRelay
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

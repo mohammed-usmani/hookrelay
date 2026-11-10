@@ -1,0 +1,15 @@
+# The docker-compose demo: retries in seconds instead of hours so failures and recovery are watchable.
+hookrelay:
+  ssrf:
+    allow-http: true
+    # the compose network (see docker-compose.yml); the sample receiver lives there
+    allowed-cidrs: ${HOOKRELAY_DEMO_ALLOWED_CIDRS:172.28.0.0/16}
+  delivery:
+    retry-schedule: 1s,5s,5s,30s,30s,30s,30s
+  circuit:
+    cooldowns: 10s,30s,60s
+
+logging:
+  structured:
+    format:
+      console: ecs

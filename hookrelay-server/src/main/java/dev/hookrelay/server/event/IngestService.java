@@ -14,6 +14,8 @@ import dev.hookrelay.server.eventtype.EventType;
 import dev.hookrelay.server.eventtype.EventTypeService;
 import dev.hookrelay.server.eventtype.SchemaValidator;
 import jakarta.persistence.EntityManager;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -49,12 +51,14 @@ public class IngestService {
     private final EntityManager em;
     private final TransactionTemplate tx;
     private final HookRelayProperties props;
+    private final Counter ingested;
     private final Clock clock;
 
     IngestService(EventRequestParser parser, EventTypeService eventTypes, SchemaValidator schemas,
                   EndpointService endpoints, DeliveryDispatcher dispatcher, DeliveryRepository deliveries,
                   IdempotencyRepository idempotency, EntityManager em, TransactionTemplate tx,
-                  HookRelayProperties props, Clock clock) {
+                  HookRelayProperties props,
+                  MeterRegistry meters, Clock clock) {
         this.parser = parser;
         this.eventTypes = eventTypes;
         this.schemas = schemas;
@@ -65,6 +69,7 @@ public class IngestService {
         this.em = em;
         this.tx = tx;
         this.props = props;
+        this.ingested = meters.counter("hookrelay.events.ingested");
         this.clock = clock;
     }
 
@@ -136,6 +141,7 @@ public class IngestService {
         UUID eventId = Ids.newId();
         Instant now = Times.now(clock);
         em.persist(new Event(eventId, appId, type, payload, now));
+        ingested.increment();
         Delivery d = new Delivery(Ids.newId(), appId, eventId, target.getId(), now,
                 now.plus(props.delivery().window()));
         em.persist(d);
@@ -146,6 +152,7 @@ public class IngestService {
     /** Persists the event and fans it out to every subscribed endpoint. */
     int store(UUID appId, String type, String payload, UUID eventId, Instant now) {
         em.persist(new Event(eventId, appId, type, payload, now));
+        ingested.increment();
         List<Endpoint> targets = endpoints.subscribers(appId, type);
         for (Endpoint target : targets) {
             Delivery d = new Delivery(Ids.newId(), appId, eventId, target.getId(), now,

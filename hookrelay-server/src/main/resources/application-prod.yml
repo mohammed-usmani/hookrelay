@@ -1,0 +1,5 @@
+# Production: JSON logs (MDC keys such as deliveryId/endpointId become fields); secrets only from env.
+logging:
+  structured:
+    format:
+      console: ecs

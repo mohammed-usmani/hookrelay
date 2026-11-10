@@ -39,13 +39,14 @@ public class DeliveryStateService {
     private final RetryPolicy retryPolicy;
     private final CircuitBreaker circuitBreaker;
     private final EndpointDisabler disabler;
+    private final DeliveryMetrics metrics;
     private final HookRelayProperties props;
     private final Clock clock;
 
     DeliveryStateService(DeliveryRepository deliveries, EndpointRepository endpoints, EndpointService endpointService,
                          EventRepository events, AttemptRepository attempts, OutboxRepository outbox,
                          DeliveryDispatcher dispatcher, RetryPolicy retryPolicy, CircuitBreaker circuitBreaker,
-                         EndpointDisabler disabler, HookRelayProperties props, Clock clock) {
+                         EndpointDisabler disabler, DeliveryMetrics metrics, HookRelayProperties props, Clock clock) {
         this.deliveries = deliveries;
         this.endpoints = endpoints;
         this.endpointService = endpointService;
@@ -56,6 +57,7 @@ public class DeliveryStateService {
         this.retryPolicy = retryPolicy;
         this.circuitBreaker = circuitBreaker;
         this.disabler = disabler;
+        this.metrics = metrics;
         this.props = props;
         this.clock = clock;
     }
@@ -121,6 +123,7 @@ public class DeliveryStateService {
     @Transactional
     public boolean recordResult(Claim c, Instant startedAt, SendResult r) {
         attempts.save(new Attempt(Ids.newId(), c.deliveryId(), c.endpointId(), c.attemptNo(), startedAt, r));
+        metrics.attempt(r);
         Delivery d = deliveries.findForUpdate(c.deliveryId()).orElseThrow();
         if (!d.getDispatchToken().equals(c.token()) || d.getStatus().isFinal()) {
             return false; // someone else (replay, deletion, sweeper) took over meanwhile
@@ -130,6 +133,7 @@ public class DeliveryStateService {
         if (r.succeeded()) {
             e.setCircuit(circuitBreaker.onSuccess(e.circuit(), now));
             d.recordAttempt(DeliveryStatus.SUCCEEDED, null, now);
+            metrics.completed(DeliveryStatus.SUCCEEDED);
             return false;
         }
         e.setCircuit(circuitBreaker.onFailure(e.circuit(), now));
@@ -216,6 +220,7 @@ public class DeliveryStateService {
     public void markDead(Delivery d, String reason) {
         Instant now = Times.now(clock);
         d.markDead(reason, now);
+        metrics.completed(DeliveryStatus.DEAD);
         outbox.save(new OutboxMessage(d.getId(), d.getDispatchToken(), OutboxMessage.Target.DEAD, null, now));
     }
 

@@ -35,6 +35,8 @@ class DeliveryBeans {
         f.setConcurrentConsumers(props.delivery().consumerConcurrency());
         f.setPrefetchCount(props.delivery().prefetch());
         f.setDefaultRequeueRejected(false);
+        // on shutdown, let in-flight sends finish (send timeout is 15s) before the connection closes
+        f.setContainerCustomizer(c -> c.setShutdownTimeout(20_000));
         return f;
     }
 }

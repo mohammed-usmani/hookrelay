@@ -1,0 +1,11 @@
+# Local development against docker-compose.dev.yml. Never use these secrets anywhere else.
+hookrelay:
+  admin-token: ${HOOKRELAY_ADMIN_TOKEN:dev-admin-token}
+  encryption-key: ${HOOKRELAY_ENCRYPTION_KEY:ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzItYnl0ZXM=}
+  ssrf:
+    allow-http: true
+    allowed-cidrs: [127.0.0.1/32]
+
+logging:
+  level:
+    dev.hookrelay: DEBUG

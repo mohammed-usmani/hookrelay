@@ -36,6 +36,9 @@ public abstract class IntegrationTest {
     @LocalServerPort
     protected int port;
 
+    @org.springframework.beans.factory.annotation.Value("${local.management.port}")
+    protected int managementPort;
+
     @Autowired
     protected MutableClock clock;
 
@@ -54,6 +57,14 @@ public abstract class IntegrationTest {
     protected RestClient client() {
         return RestClient.builder()
                 .baseUrl("http://localhost:" + port)
+                .defaultStatusHandler(status -> true, (req, res) -> { })
+                .build();
+    }
+
+    /** Client for the management server (actuator), which listens on its own port. */
+    protected RestClient management() {
+        return RestClient.builder()
+                .baseUrl("http://localhost:" + managementPort)
                 .defaultStatusHandler(status -> true, (req, res) -> { })
                 .build();
     }

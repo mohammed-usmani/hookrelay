@@ -1,6 +1,11 @@
+server:
+  shutdown: graceful
+
 spring:
   application:
     name: hookrelay
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   datasource:
     url: ${HOOKRELAY_DB_URL:jdbc:mariadb://localhost:3306/hookrelay}
     username: ${HOOKRELAY_DB_USER:hookrelay}
@@ -28,3 +33,25 @@ spring:
 hookrelay:
   admin-token: ${HOOKRELAY_ADMIN_TOKEN:}
   encryption-key: ${HOOKRELAY_ENCRYPTION_KEY:}
+
+management:
+  server:
+    # actuator lives on its own port: scrape and probe it from inside the network, never expose it
+    port: ${HOOKRELAY_MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-components: always
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState,db,rabbit
+  metrics:
+    tags:
+      application: ${spring.application.name}
