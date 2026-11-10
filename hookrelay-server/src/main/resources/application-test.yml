@@ -7,3 +7,8 @@ hookrelay:
   admin-token: test-admin-token
   # 32 zero bytes, base64 — test only
   encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
+logging:
+  level:
+    root: WARN
+    dev.hookrelay: INFO
