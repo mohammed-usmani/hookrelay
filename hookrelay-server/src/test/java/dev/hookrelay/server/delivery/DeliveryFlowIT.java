@@ -54,6 +54,7 @@ class DeliveryFlowIT extends DeliveryTestSupport {
         List<LoggedRequest> got = hits("/ok");
         assertThat(got).hasSize(1);
         assertThat(got.get(0).getHeader("webhook-id")).isEqualTo(eventId);
+        assertThat(got.get(0).getHeader("hookrelay-event-type")).isEqualTo("order.created");
         new WebhookVerifier(secret, Clock.systemUTC()).verify(headers(got.get(0)), got.get(0).getBody());
     }
 

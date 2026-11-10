@@ -100,7 +100,8 @@ class DeliveryWorker {
         Map<String, String> headers = Map.of(
                 "webhook-id", id,
                 "webhook-timestamp", Long.toString(ts),
-                "webhook-signature", signer.sign(id, ts, body, c.secrets()));
+                "webhook-signature", signer.sign(id, ts, body, c.secrets()),
+                "hookrelay-event-type", c.eventType()); // lets receivers route without parsing the body
         return sender.send(url, headers, body);
     }
 }

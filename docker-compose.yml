@@ -1,0 +1,95 @@
+# The whole system: two HookRelay instances, MariaDB, RabbitMQ, a sample receiver, Prometheus, Grafana.
+#   cp .env.example .env && docker compose up -d --build && ./scripts/demo.sh
+x-hookrelay: &hookrelay
+  build:
+    context: .
+    dockerfile: hookrelay-server/Dockerfile
+  environment:
+    SPRING_PROFILES_ACTIVE: demo
+    HOOKRELAY_DB_URL: jdbc:mariadb://mariadb:3306/hookrelay
+    HOOKRELAY_DB_USER: hookrelay
+    HOOKRELAY_DB_PASSWORD: ${DB_PASSWORD:?copy .env.example to .env}
+    HOOKRELAY_RABBIT_HOST: rabbitmq
+    HOOKRELAY_RABBIT_USER: ${RABBIT_USER:?copy .env.example to .env}
+    HOOKRELAY_RABBIT_PASSWORD: ${RABBIT_PASSWORD:?copy .env.example to .env}
+    HOOKRELAY_ADMIN_TOKEN: ${HOOKRELAY_ADMIN_TOKEN:?copy .env.example to .env}
+    HOOKRELAY_ENCRYPTION_KEY: ${HOOKRELAY_ENCRYPTION_KEY:?copy .env.example to .env}
+    HOOKRELAY_DEMO_ALLOWED_CIDRS: 172.28.0.0/16
+  depends_on:
+    mariadb: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+  networks: [hookrelay]
+  restart: unless-stopped
+  stop_grace_period: 40s
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: hookrelay
+      MARIADB_USER: hookrelay
+      MARIADB_PASSWORD: ${DB_PASSWORD:?copy .env.example to .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?copy .env.example to .env}
+    volumes: [mariadb-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+    networks: [hookrelay]
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:?copy .env.example to .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?copy .env.example to .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./ops/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    ports: ["127.0.0.1:15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 30
+    networks: [hookrelay]
+
+  hookrelay-1:
+    <<: *hookrelay
+    ports: ["127.0.0.1:8080:8080"]
+
+  hookrelay-2:
+    <<: *hookrelay
+    ports: ["127.0.0.1:8090:8080"]
+
+  receiver:
+    build:
+      context: .
+      dockerfile: hookrelay-receiver/Dockerfile
+    ports: ["127.0.0.1:9000:9000"]
+    networks: [hookrelay]
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    volumes: [./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    ports: ["127.0.0.1:9090:9090"]
+    networks: [hookrelay]
+
+  grafana:
+    image: grafana/grafana:12.0.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hookrelay.json
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+    networks: [hookrelay]
+
+networks:
+  hookrelay:
+    ipam:
+      config: [{ subnet: 172.28.0.0/16 }]
+
+volumes:
+  mariadb-data:
+  rabbitmq-data:

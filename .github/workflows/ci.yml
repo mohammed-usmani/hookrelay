@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and test (unit + Testcontainers integration tests)
+        run: ./mvnw -B verify
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/target/*-reports/"
+      - name: Build images
+        run: |
+          docker build -f hookrelay-server/Dockerfile -t hookrelay-server:ci .
+          docker build -f hookrelay-receiver/Dockerfile -t hookrelay-receiver:ci .
