@@ -67,7 +67,11 @@ class DeliveryWorker {
                 MDC.put("application_id", c.applicationId().toString());
                 Instant startedAt = Times.now(clock);
                 SendResult result = attempt(c);
-                state.recordResult(c, startedAt, result);
+                if (state.recordResult(c, startedAt, result)) {
+                    int killed = state.killPending(c.endpointId(), "endpoint_disabled");
+                    log.warn("Endpoint {} disabled after failing too long; {} pending deliveries dead-lettered",
+                            c.endpointId(), killed);
+                }
                 log.info("Attempt {} for delivery {}: {}", c.attemptNo(), c.deliveryId(), result.outcome());
             }
             channel.basicAck(tag, false);

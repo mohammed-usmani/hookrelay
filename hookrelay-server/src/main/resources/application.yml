@@ -20,6 +20,10 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    listener:
+      simple:
+        # a message that keeps failing is dropped (and logged), never redelivered in a hot loop
+        default-requeue-rejected: false
 
 hookrelay:
   admin-token: ${HOOKRELAY_ADMIN_TOKEN:}

@@ -14,6 +14,7 @@ import dev.hookrelay.server.eventtype.EventType;
 import dev.hookrelay.server.eventtype.EventTypeService;
 import dev.hookrelay.server.eventtype.SchemaValidator;
 import jakarta.persistence.EntityManager;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -106,6 +108,39 @@ public class IngestService {
         }
         int count = store(appId, type.getName(), parsed.payload(), eventId, now);
         return new IngestResult(eventId, count, false);
+    }
+
+    /**
+     * An event HookRelay emits itself (reserved {@code hookrelay.*} types). The idempotency key
+     * makes repeated triggers (e.g. a duplicate DLQ message) produce one event.
+     */
+    @Transactional
+    public UUID ingestSystem(UUID appId, String type, String payload, String idemKey) {
+        IdempotencyRecord.Key key = new IdempotencyRecord.Key(appId, idemKey);
+        Optional<IdempotencyRecord> seen = idempotency.findById(key);
+        if (seen.isPresent()) {
+            return seen.get().getEventId();
+        }
+        UUID eventId = Ids.newId();
+        Instant now = Times.now(clock);
+        em.persist(new IdempotencyRecord(key, Secrets.sha256(payload.getBytes(StandardCharsets.UTF_8)), eventId, now));
+        store(appId, type, payload, eventId, now);
+        return eventId;
+    }
+
+    public record Targeted(UUID eventId, UUID deliveryId) { }
+
+    /** An event delivered to one chosen endpoint only (the "send test event" button). */
+    @Transactional
+    public Targeted ingestTargeted(UUID appId, String type, String payload, Endpoint target) {
+        UUID eventId = Ids.newId();
+        Instant now = Times.now(clock);
+        em.persist(new Event(eventId, appId, type, payload, now));
+        Delivery d = new Delivery(Ids.newId(), appId, eventId, target.getId(), now,
+                now.plus(props.delivery().window()));
+        em.persist(d);
+        dispatcher.enqueue(d, null);
+        return new Targeted(eventId, d.getId());
     }
 
     /** Persists the event and fans it out to every subscribed endpoint. */

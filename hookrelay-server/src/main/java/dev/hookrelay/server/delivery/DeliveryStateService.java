@@ -9,6 +9,7 @@ import dev.hookrelay.server.endpoint.EndpointService;
 import dev.hookrelay.server.endpoint.EndpointStatus;
 import dev.hookrelay.server.event.Event;
 import dev.hookrelay.server.event.EventRepository;
+import dev.hookrelay.server.notify.EndpointDisabler;
 import dev.hookrelay.server.outbox.OutboxMessage;
 import dev.hookrelay.server.outbox.OutboxRepository;
 import java.time.Clock;
@@ -37,13 +38,14 @@ public class DeliveryStateService {
     private final DeliveryDispatcher dispatcher;
     private final RetryPolicy retryPolicy;
     private final CircuitBreaker circuitBreaker;
+    private final EndpointDisabler disabler;
     private final HookRelayProperties props;
     private final Clock clock;
 
     DeliveryStateService(DeliveryRepository deliveries, EndpointRepository endpoints, EndpointService endpointService,
                          EventRepository events, AttemptRepository attempts, OutboxRepository outbox,
                          DeliveryDispatcher dispatcher, RetryPolicy retryPolicy, CircuitBreaker circuitBreaker,
-                         HookRelayProperties props, Clock clock) {
+                         EndpointDisabler disabler, HookRelayProperties props, Clock clock) {
         this.deliveries = deliveries;
         this.endpoints = endpoints;
         this.endpointService = endpointService;
@@ -53,6 +55,7 @@ public class DeliveryStateService {
         this.dispatcher = dispatcher;
         this.retryPolicy = retryPolicy;
         this.circuitBreaker = circuitBreaker;
+        this.disabler = disabler;
         this.props = props;
         this.clock = clock;
     }
@@ -111,22 +114,26 @@ public class DeliveryStateService {
                 endpointService.activeSecrets(e.getId(), now)));
     }
 
-    /** Stores the attempt and moves the delivery on: done, retry later, or dead. */
+    /**
+     * Stores the attempt and moves the delivery on: done, retry later, or dead. Returns true if
+     * this failure got the endpoint disabled; the caller then runs {@link #killPending}.
+     */
     @Transactional
-    public void recordResult(Claim c, Instant startedAt, SendResult r) {
+    public boolean recordResult(Claim c, Instant startedAt, SendResult r) {
         attempts.save(new Attempt(Ids.newId(), c.deliveryId(), c.endpointId(), c.attemptNo(), startedAt, r));
         Delivery d = deliveries.findForUpdate(c.deliveryId()).orElseThrow();
         if (!d.getDispatchToken().equals(c.token()) || d.getStatus().isFinal()) {
-            return; // someone else (replay, deletion, sweeper) took over meanwhile
+            return false; // someone else (replay, deletion, sweeper) took over meanwhile
         }
         Instant now = Times.now(clock);
         Endpoint e = endpoints.findForUpdate(c.endpointId()).orElseThrow();
         if (r.succeeded()) {
             e.setCircuit(circuitBreaker.onSuccess(e.circuit(), now));
             d.recordAttempt(DeliveryStatus.SUCCEEDED, null, now);
-            return;
+            return false;
         }
         e.setCircuit(circuitBreaker.onFailure(e.circuit(), now));
+        boolean disabled = disabler.check(e, now);
         d.recordAttempt(DeliveryStatus.FAILED_RETRYING, Attempt.truncate(describe(r), 500), now);
         Optional<Duration> delay = retryPolicy.nextDelay(d.getAttemptCount());
         if (delay.isPresent()) {
@@ -134,6 +141,24 @@ public class DeliveryStateService {
         } else {
             markDead(d, "retries_exhausted");
         }
+        return disabled;
+    }
+
+    /**
+     * Dead-letters every unfinished delivery of an endpoint. A separate transaction that never
+     * locks the endpoint row, so it can't deadlock with workers (they lock delivery, then endpoint).
+     */
+    @Transactional
+    public int killPending(UUID endpointId, String reason) {
+        int killed = 0;
+        for (UUID id : deliveries.unfinishedIds(endpointId)) {
+            Delivery d = deliveries.findForUpdate(id).orElseThrow();
+            if (!d.getStatus().isFinal()) {
+                markDead(d, reason);
+                killed++;
+            }
+        }
+        return killed;
     }
 
     /** Final failure: DB status for the API, plus a DLQ message for side effects. */
