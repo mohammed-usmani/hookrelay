@@ -16,7 +16,8 @@ public record HookRelayProperties(
         @DefaultValue Ssrf ssrf,
         @DefaultValue Delivery delivery,
         @DefaultValue Circuit circuit,
-        @DefaultValue RateLimit rateLimit) {
+        @DefaultValue RateLimit rateLimit,
+        @DefaultValue Retention retention) {
 
     /**
      * Outbound URL safety. Both switches exist for local development and tests only and must
@@ -49,4 +50,11 @@ public record HookRelayProperties(
     public record RateLimit(
             @DefaultValue("100") int inboundPerSecond,
             @DefaultValue("200") int inboundBurst) { }
+
+    /** How long data is kept before the nightly retention job removes it. */
+    public record Retention(
+            @DefaultValue("30d") Duration payloads,
+            @DefaultValue("90d") Duration attempts,
+            @DefaultValue("24h") Duration idempotencyKeys,
+            @DefaultValue("7d") Duration publishedOutbox) { }
 }

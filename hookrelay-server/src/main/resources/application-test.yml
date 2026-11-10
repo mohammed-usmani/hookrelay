@@ -17,6 +17,10 @@ hookrelay:
     send-timeout: 3s
   circuit:
     cooldowns: 2s,4s,8s
+  jobs:
+    # tests run the jobs by hand
+    retention-cron: "-"
+    sweep-cron: "-"
   rate-limit:
     inbound-per-second: 20
     inbound-burst: 40

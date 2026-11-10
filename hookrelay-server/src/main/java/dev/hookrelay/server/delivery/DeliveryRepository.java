@@ -61,4 +61,29 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
             select d.status, count(d) from Delivery d
             where d.endpointId = :endpointId and d.createdAt >= :since group by d.status""")
     java.util.List<Object[]> countByStatusSince(UUID endpointId, java.time.Instant since);
+
+    /** Unfinished, not parked, overdue, and nothing waiting in the outbox: its message was lost. */
+    @Query("""
+            select d.id from Delivery d
+            where d.status in (dev.hookrelay.server.delivery.DeliveryStatus.PENDING,
+                               dev.hookrelay.server.delivery.DeliveryStatus.FAILED_RETRYING)
+              and d.parkedAt is null and d.nextAttemptAt < :staleBefore
+              and not exists (select 1 from OutboxMessage o where o.deliveryId = d.id and o.publishedAt is null)
+            order by d.nextAttemptAt""")
+    java.util.List<UUID> stuckIds(java.time.Instant staleBefore, org.springframework.data.domain.Limit limit);
+
+    @Query("""
+            select d.id from Delivery d, dev.hookrelay.server.endpoint.Endpoint e
+            where e.id = d.endpointId and d.parkedAt is not null
+              and d.status in (dev.hookrelay.server.delivery.DeliveryStatus.PENDING,
+                               dev.hookrelay.server.delivery.DeliveryStatus.FAILED_RETRYING)
+              and e.status = dev.hookrelay.server.endpoint.EndpointStatus.ACTIVE and e.deletedAt is null""")
+    java.util.List<UUID> parkedOnActiveIds(org.springframework.data.domain.Limit limit);
+
+    @Query("""
+            select d.id from Delivery d
+            where d.parkedAt is not null and d.deadlineAt < :now
+              and d.status in (dev.hookrelay.server.delivery.DeliveryStatus.PENDING,
+                               dev.hookrelay.server.delivery.DeliveryStatus.FAILED_RETRYING)""")
+    java.util.List<UUID> expiredParkedIds(java.time.Instant now, org.springframework.data.domain.Limit limit);
 }

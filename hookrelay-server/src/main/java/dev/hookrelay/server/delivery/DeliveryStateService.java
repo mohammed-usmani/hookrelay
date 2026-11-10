@@ -144,6 +144,40 @@ public class DeliveryStateService {
         return disabled;
     }
 
+    /**
+     * Re-queues a delivery the stuck sweeper found: parked on an endpoint that is active again,
+     * or overdue with no message anywhere. Re-checked under lock; false if it moved on meanwhile.
+     */
+    @Transactional
+    public boolean recover(UUID deliveryId, Instant staleBefore) {
+        Delivery d = deliveries.findForUpdate(deliveryId).orElseThrow();
+        if (d.getStatus().isFinal()) {
+            return false;
+        }
+        if (d.getParkedAt() != null) {
+            Endpoint e = endpoints.findById(d.getEndpointId()).orElseThrow();
+            if (e.getStatus() != EndpointStatus.ACTIVE || e.isDeleted()) {
+                return false;
+            }
+            d.unpark(Times.now(clock));
+        } else if (!d.getNextAttemptAt().isBefore(staleBefore) || outbox.existsByDeliveryIdAndPublishedAtIsNull(d.getId())) {
+            return false;
+        }
+        dispatcher.enqueue(d, null);
+        return true;
+    }
+
+    /** Dead-letters a parked delivery whose window has closed. */
+    @Transactional
+    public boolean expireParked(UUID deliveryId) {
+        Delivery d = deliveries.findForUpdate(deliveryId).orElseThrow();
+        if (d.getStatus().isFinal() || d.getParkedAt() == null || !d.getDeadlineAt().isBefore(Times.now(clock))) {
+            return false;
+        }
+        markDead(d, "expired");
+        return true;
+    }
+
     /** Re-queues every parked delivery of an endpoint (it was paused or disabled, now active). */
     @Transactional
     public int unparkAll(UUID endpointId) {
