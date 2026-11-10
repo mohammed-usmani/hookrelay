@@ -7,6 +7,10 @@ hookrelay:
   admin-token: test-admin-token
   # 32 zero bytes, base64 — test only
   encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  ssrf:
+    allow-http: true
+    # WireMock runs on loopback in the test JVM
+    allowed-cidrs: ["127.0.0.1/32"]
 
 logging:
   level:
