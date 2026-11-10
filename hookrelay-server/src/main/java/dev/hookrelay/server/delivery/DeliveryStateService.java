@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,13 +96,17 @@ public class DeliveryStateService {
             dispatcher.enqueue(d, DelayTier.atLeast(admission.delay())); // not an attempt
             return Optional.empty();
         }
+        Duration sendAfter = Duration.ZERO;
         if (e.getRateLimitPerSec() != null) {
             OutboundRateLimiter.Slot slot = OutboundRateLimiter.take(e.getRateNextSendAt(), e.getRateLimitPerSec(), now);
-            if (slot.delay().isPresent()) {
-                dispatcher.enqueue(d, DelayTier.atLeast(slot.delay().get())); // not an attempt
+            if (!slot.reserved()) {
+                Duration wait = OutboundRateLimiter.deferFor(slot.waitFor(), deliveries.countWaiting(e.getId()),
+                        e.getRateLimitPerSec(), ThreadLocalRandom.current().nextDouble());
+                dispatcher.enqueue(d, DelayTier.atLeast(wait)); // not an attempt
                 return Optional.empty();
             }
             e.setRateNextSendAt(slot.nextSendAt());
+            sendAfter = slot.waitFor();
         }
         e.setCircuit(admission.next());
         Event event = events.findById(d.getEventId()).orElseThrow();
@@ -113,7 +118,7 @@ public class DeliveryStateService {
         UUID claimToken = d.rotateToken(now.plus(grace), now);
         return Optional.of(new Claim(d.getId(), claimToken, attempts.lastAttemptNo(d.getId()) + 1, d.getApplicationId(),
                 event.getId(), event.getEventType(), e.getId(), e.getUrl(), event.getPayload(),
-                endpointService.activeSecrets(e.getId(), now)));
+                endpointService.activeSecrets(e.getId(), now), sendAfter));
     }
 
     /**

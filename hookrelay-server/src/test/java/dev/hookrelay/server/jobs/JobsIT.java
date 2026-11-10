@@ -144,4 +144,12 @@ class JobsIT extends DeliveryTestSupport {
         assertThat(jdbc.queryForObject("select count(*) from shedlock where name = 'retention'", Integer.class))
                 .isEqualTo(1);
     }
+
+    @Test
+    void thePayloadPurgeUsesAnIndexThatSkipsPurgedRows() {
+        java.util.List<java.util.Map<String, Object>> plan = jdbc.queryForList("""
+                explain update events set payload = null, payload_purged_at = utc_timestamp(6)
+                where created_at < utc_timestamp(6) and payload_purged_at is null limit 1000""");
+        assertThat(plan.get(0).get("key")).isEqualTo("idx_events_purge");
+    }
 }

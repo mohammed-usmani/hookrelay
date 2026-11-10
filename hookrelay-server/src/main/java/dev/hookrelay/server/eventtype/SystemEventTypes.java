@@ -14,6 +14,6 @@ public final class SystemEventTypes {
     private SystemEventTypes() { }
 
     public static boolean isSystem(String name) {
-        return name.startsWith(EventType.SYSTEM_PREFIX);
+        return name.toLowerCase(java.util.Locale.ROOT).startsWith(EventType.SYSTEM_PREFIX);
     }
 }

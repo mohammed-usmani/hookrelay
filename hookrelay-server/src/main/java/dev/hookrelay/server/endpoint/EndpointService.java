@@ -70,6 +70,16 @@ public class EndpointService {
         return repo.findLive(appId, id).orElseThrow(() -> new NotFoundException("endpoint"));
     }
 
+    /**
+     * For changes: workers update the circuit and status columns under this same row lock, and
+     * Hibernate writes every column on flush, so an unlocked read would overwrite their changes.
+     */
+    private Endpoint lock(UUID appId, UUID id) {
+        return repo.findForUpdate(id)
+                .filter(e -> e.getApplicationId().equals(appId) && !e.isDeleted())
+                .orElseThrow(() -> new NotFoundException("endpoint"));
+    }
+
     @Transactional(readOnly = true)
     public CursorPage<Endpoint> list(UUID appId, String cursor, Integer limit) {
         int n = CursorPage.clampLimit(limit);
@@ -83,7 +93,7 @@ public class EndpointService {
     @Transactional
     public Endpoint update(UUID appId, UUID id, String url, String description, Set<String> types,
                            Integer rateLimitPerSec) {
-        Endpoint e = get(appId, id);
+        Endpoint e = lock(appId, id);
         if (url != null) {
             checkUrl(url);
             e.setUrl(url);
@@ -104,14 +114,14 @@ public class EndpointService {
 
     @Transactional
     public Endpoint pause(UUID appId, UUID id) {
-        Endpoint e = get(appId, id);
+        Endpoint e = lock(appId, id);
         e.setStatus(EndpointStatus.PAUSED, Times.now(clock));
         return e;
     }
 
     @Transactional
     public Endpoint resume(UUID appId, UUID id) {
-        Endpoint e = get(appId, id);
+        Endpoint e = lock(appId, id);
         e.setStatus(EndpointStatus.ACTIVE, Times.now(clock));
         Circuit c = e.circuit(); // a fresh start: also restarts the auto-disable clock
         e.setCircuit(new Circuit(CircuitState.CLOSED, 0, null, 0, c.lastSuccessAt(), null));
@@ -121,14 +131,14 @@ public class EndpointService {
 
     @Transactional
     public void delete(UUID appId, UUID id) {
-        get(appId, id).markDeleted(Times.now(clock));
+        lock(appId, id).markDeleted(Times.now(clock));
         events.publishEvent(new EndpointLifecycle.Deleted(id));
     }
 
     /** Starts signing with a new secret; the previous ones keep signing for 24 hours. */
     @Transactional
     public String rotateSecret(UUID appId, UUID id) {
-        Endpoint e = get(appId, id);
+        Endpoint e = lock(appId, id);
         Instant now = Times.now(clock);
         secrets.active(e.getId(), now).forEach(s -> s.expireAt(now.plus(ROTATION_OVERLAP)));
         String secret = signer.newSecret();

@@ -1,4 +1,4 @@
-# Production: JSON logs (MDC keys such as deliveryId/endpointId become fields); secrets only from env.
+# Production: JSON logs (MDC keys delivery_id/event_id/application_id become fields); secrets only from env.
 logging:
   structured:
     format:

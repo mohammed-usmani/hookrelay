@@ -128,4 +128,37 @@ class IngestIT extends IntegrationTest {
         String stored = jdbc.queryForObject("select payload from events where id = ?", String.class, eventId);
         assertThat(stored).isEqualTo(payload);
     }
+
+    @Test
+    void systemTypesCannotBePostedInAnyLetterCase() {
+        ResponseEntity<JsonNode> res = post("{\"eventType\":\"HOOKRELAY.DELIVERY.DEAD\",\"payload\":{}}", null);
+        assertThat(res.getStatusCode().value()).isEqualTo(422);
+        assertThat(res.getBody().at("/type").asString()).endsWith("/reserved-event-type");
+    }
+
+    @Test
+    void concurrentRequestsWithTheSameKeyBothGetTheOriginal() throws Exception {
+        endpoint(List.of());
+        for (int round = 0; round < 10; round++) {
+            String key = "race-" + round;
+            java.util.concurrent.CyclicBarrier go = new java.util.concurrent.CyclicBarrier(2);
+            java.util.concurrent.Callable<ResponseEntity<JsonNode>> call = () -> {
+                go.await();
+                return post("{\"eventType\":\"order.created\",\"payload\":{\"r\":1}}", key);
+            };
+            var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            try {
+                var a = pool.submit(call);
+                var b = pool.submit(call);
+                ResponseEntity<JsonNode> ra = a.get();
+                ResponseEntity<JsonNode> rb = b.get();
+                assertThat(List.of(ra.getStatusCode().value(), rb.getStatusCode().value())).as("round " + round)
+                        .containsOnly(202);
+                assertThat(ra.getBody().at("/id").asString()).isEqualTo(rb.getBody().at("/id").asString());
+            } finally {
+                pool.shutdown();
+            }
+        }
+        assertThat(count("events", "application_id = ?", tenant.appId())).isEqualTo(10);
+    }
 }

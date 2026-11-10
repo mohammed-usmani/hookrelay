@@ -86,4 +86,11 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
               and d.status in (dev.hookrelay.server.delivery.DeliveryStatus.PENDING,
                                dev.hookrelay.server.delivery.DeliveryStatus.FAILED_RETRYING)""")
     java.util.List<UUID> expiredParkedIds(java.time.Instant now, org.springframework.data.domain.Limit limit);
+
+    /** Unfinished, unparked deliveries of an endpoint: the backlog a rate limit has to drain. */
+    @Query("""
+            select count(d) from Delivery d where d.endpointId = :endpointId and d.parkedAt is null
+              and d.status in (dev.hookrelay.server.delivery.DeliveryStatus.PENDING,
+                               dev.hookrelay.server.delivery.DeliveryStatus.FAILED_RETRYING)""")
+    long countWaiting(UUID endpointId);
 }

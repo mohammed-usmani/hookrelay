@@ -71,7 +71,8 @@ class NotificationsIT extends DeliveryTestSupport {
         endpoint(receiverUrl("/ops"), List.of("hookrelay.endpoint.disabled"));
 
         String first = send("{\"n\":1}");
-        await().atMost(Duration.ofSeconds(30)).until(() -> attempts(first) >= 1);
+        // 8 failures now, then 3 days later more: persistently failing, not a one-off
+        await().atMost(Duration.ofSeconds(30)).until(() -> "DEAD".equals(status(first)));
         clock.advance(Duration.ofDays(3).plusMinutes(1));
         String second = send("{\"n\":2}");
 
@@ -100,5 +101,21 @@ class NotificationsIT extends DeliveryTestSupport {
         assertThat(body.at("/endpointId").asString()).isEqualTo(id);
         await().pollDelay(Duration.ofSeconds(2)).until(() -> true);
         assertThat(hits("/all")).isEmpty();
+    }
+
+    @Test
+    void aSingleFailureAfterAQuietSpellDoesNotDisableTheEndpoint() {
+        receiver.stubFor(post("/quiet").willReturn(aResponse().withStatus(500)));
+        String id = endpoint(receiverUrl("/quiet"), List.of("order.created")).at("/id").asString();
+        // last failure was 4 days ago, then nothing until now
+        jdbc.update("update endpoints set first_failure_at = ?, consecutive_failures = 1 where id = ?",
+                java.time.LocalDateTime.ofInstant(java.time.Instant.now(clock).minus(Duration.ofDays(4)),
+                        java.time.ZoneOffset.UTC), id);
+
+        String eventId = send("{}");
+        await().atMost(Duration.ofSeconds(30)).until(() -> attempts(eventId) >= 1);
+
+        assertThat(jdbc.queryForObject("select status from endpoints where id = ?", String.class, id))
+                .isEqualTo("ACTIVE");
     }
 }

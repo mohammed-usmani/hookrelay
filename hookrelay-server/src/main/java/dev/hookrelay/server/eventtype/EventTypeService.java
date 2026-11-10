@@ -103,6 +103,9 @@ public class EventTypeService {
         }
         EventType t = repo.findByApplicationIdAndName(appId, name).orElseThrow(() ->
                 ApiException.unprocessable("unknown-event-type", "event type '" + name + "' does not exist"));
+        if (t.isSystem()) { // names compare case-insensitively in the database
+            throw ApiException.unprocessable("reserved-event-type", "system event types cannot be posted");
+        }
         if (t.isArchived()) {
             throw ApiException.unprocessable("archived-event-type", "event type '" + name + "' is archived");
         }

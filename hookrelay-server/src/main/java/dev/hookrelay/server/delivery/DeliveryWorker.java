@@ -84,6 +84,13 @@ class DeliveryWorker {
     }
 
     private SendResult attempt(Claim c) {
+        if (!c.sendAfter().isZero()) {
+            try {
+                Thread.sleep(c.sendAfter()); // our reserved rate-limit slot, at most a second away
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         long start = System.nanoTime();
         URI url = URI.create(c.url());
         try {

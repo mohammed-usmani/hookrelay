@@ -18,10 +18,12 @@ public class EndpointDisabler {
 
     private final SystemEvents systemEvents;
     private final Duration disableAfter;
+    private final int failureThreshold;
 
     EndpointDisabler(SystemEvents systemEvents, HookRelayProperties props) {
         this.systemEvents = systemEvents;
         this.disableAfter = props.circuit().disableAfter();
+        this.failureThreshold = props.circuit().failureThreshold();
     }
 
     /**
@@ -31,8 +33,9 @@ public class EndpointDisabler {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean check(Endpoint e, Instant now) {
         Instant firstFailure = e.circuit().firstFailureAt();
+        // failing for long AND failing persistently: one failure after a quiet week is not "down for 3 days"
         if (e.getStatus() != EndpointStatus.ACTIVE || firstFailure == null
-                || firstFailure.isAfter(now.minus(disableAfter))) {
+                || firstFailure.isAfter(now.minus(disableAfter)) || e.circuit().failures() < failureThreshold) {
             return false;
         }
         e.setStatus(EndpointStatus.DISABLED, now);

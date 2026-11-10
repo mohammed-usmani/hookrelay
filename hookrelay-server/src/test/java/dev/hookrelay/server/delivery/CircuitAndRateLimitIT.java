@@ -77,4 +77,25 @@ class CircuitAndRateLimitIT extends DeliveryTestSupport {
             assertThat(inWindow).as("requests in the second after #" + i).isLessThanOrEqualTo(3);
         }
     }
+
+    @Test
+    void aRateLimitedEndpointStillGetsItsFullRate() {
+        receiver.stubFor(post("/fast").willReturn(aResponse().withStatus(200)));
+        String id = endpoint(receiverUrl("/fast"), List.of()).at("/id").asString();
+        api.patch().uri("/v1/endpoints/{id}", id).body(Map.of("rateLimitPerSec", 10)).retrieve().toBodilessEntity();
+        List<String> events = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            events.add(send("{\"n\":" + i + "}"));
+        }
+
+        await().atMost(Duration.ofSeconds(60)).until(() -> events.stream().allMatch(e -> "SUCCEEDED".equals(status(e))));
+
+        List<Long> times = receiver.findAll(postRequestedFor(urlEqualTo("/fast"))).stream()
+                .map(r -> r.getLoggedDate().getTime()).sorted().toList();
+        long spanMs = times.getLast() - times.getFirst();
+        assertThat(spanMs).as("30 sends at 10/s should take about 3 s").isLessThan(8000);
+        for (long start : times) {
+            assertThat(times.stream().filter(t -> t >= start && t < start + 1000).count()).isLessThanOrEqualTo(11);
+        }
+    }
 }

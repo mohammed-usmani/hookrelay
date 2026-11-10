@@ -81,13 +81,25 @@ public class IngestService {
         byte[] bodyHash = Secrets.sha256(body);
         try {
             return tx.execute(s -> doIngest(appId, parsed, idemKey, bodyHash));
-        } catch (DataIntegrityViolationException race) {
+        } catch (RuntimeException e) {
             // Two requests with the same key raced; the other one won. Answer as it did.
-            if (idemKey == null) {
-                throw race;
+            if (idemKey == null || !isDuplicateKey(e)) {
+                throw e;
             }
-            return tx.execute(s -> replay(appId, idemKey, bodyHash)).orElseThrow(() -> race);
+            return tx.execute(s -> replay(appId, idemKey, bodyHash)).orElseThrow(() -> e);
         }
+    }
+
+    /** The JPA flush surfaces Hibernate's exception, not Spring's translated one. */
+    private static boolean isDuplicateKey(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof DataIntegrityViolationException
+                    || t instanceof org.hibernate.exception.ConstraintViolationException
+                    || t instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private IngestResult doIngest(UUID appId, EventRequestParser.Parsed parsed, String idemKey, byte[] bodyHash) {

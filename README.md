@@ -61,7 +61,7 @@ flowchart LR
   (success rate, p50/p95 latency).
 - **Retention:** payloads purged after 30 days, attempts deleted after 90, idempotency keys after
   24 h, published outbox rows after 7 days, in batches of 1,000 under ShedLock.
-- **Operations:** Prometheus metrics, ECS JSON logs with delivery/endpoint ids, liveness and
+- **Operations:** Prometheus metrics, ECS JSON logs carrying delivery, event and application ids, liveness and
   readiness groups on a separate management port, OpenAPI with Swagger UI, and a provisioned Grafana dashboard.
 
 ## Quick start
@@ -147,7 +147,7 @@ curl -X POST localhost:8080/v1/events -H "Authorization: Bearer $KEY" -H 'Conten
   `hookrelay_endpoints_circuit{state}`, `hookrelay_deliveries_dead_total{reason}`,
   `hookrelay_deliveries_recovered_total`. Queue depths come from RabbitMQ's Prometheus plugin.
   No metric is tagged by tenant or endpoint, which keeps label cardinality bounded.
-- JSON logs (ECS) in the `prod` and `demo` profiles, with `deliveryId`/`endpointId` from the MDC.
+- JSON logs (ECS) in the `prod` and `demo` profiles, with `delivery_id`, `event_id` and `application_id` from the MDC.
 - Health: `/actuator/health/liveness` and `/actuator/health/readiness` (checks the database and the broker).
 
 ## Measured performance

@@ -10,6 +10,10 @@ spring:
     url: ${HOOKRELAY_DB_URL:jdbc:mariadb://localhost:3306/hookrelay}
     username: ${HOOKRELAY_DB_USER:hookrelay}
     password: ${HOOKRELAY_DB_PASSWORD:hookrelay}
+    hikari:
+      # REPEATABLE READ's gap locks would let the outbox relay's claim block every outbox insert
+      # while it waits for broker confirms; every decision here is taken under explicit row locks anyway
+      transaction-isolation: TRANSACTION_READ_COMMITTED
   jpa:
     open-in-view: false
     hibernate:
