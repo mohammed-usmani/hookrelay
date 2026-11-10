@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,16 +38,18 @@ public class EndpointService {
     private final SsrfGuard ssrf;
     private final SecretCipher cipher;
     private final WebhookSigner signer;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     EndpointService(EndpointRepository repo, EndpointSecretRepository secrets, EventTypeService eventTypes,
-                    SsrfGuard ssrf, SecretCipher cipher, WebhookSigner signer, Clock clock) {
+                    SsrfGuard ssrf, SecretCipher cipher, WebhookSigner signer, ApplicationEventPublisher events, Clock clock) {
         this.repo = repo;
         this.secrets = secrets;
         this.eventTypes = eventTypes;
         this.ssrf = ssrf;
         this.cipher = cipher;
         this.signer = signer;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -110,12 +113,16 @@ public class EndpointService {
     public Endpoint resume(UUID appId, UUID id) {
         Endpoint e = get(appId, id);
         e.setStatus(EndpointStatus.ACTIVE, Times.now(clock));
+        Circuit c = e.circuit(); // a fresh start: also restarts the auto-disable clock
+        e.setCircuit(new Circuit(CircuitState.CLOSED, 0, null, 0, c.lastSuccessAt(), null));
+        events.publishEvent(new EndpointLifecycle.Resumed(id));
         return e;
     }
 
     @Transactional
     public void delete(UUID appId, UUID id) {
         get(appId, id).markDeleted(Times.now(clock));
+        events.publishEvent(new EndpointLifecycle.Deleted(id));
     }
 
     /** Starts signing with a new secret; the previous ones keep signing for 24 hours. */

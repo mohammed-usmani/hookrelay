@@ -109,7 +109,7 @@ public class DeliveryStateService {
         }
         Duration grace = props.delivery().sendTimeout().plus(Duration.ofMinutes(1));
         UUID claimToken = d.rotateToken(now.plus(grace), now);
-        return Optional.of(new Claim(d.getId(), claimToken, d.getAttemptCount() + 1, d.getApplicationId(),
+        return Optional.of(new Claim(d.getId(), claimToken, attempts.lastAttemptNo(d.getId()) + 1, d.getApplicationId(),
                 event.getId(), event.getEventType(), e.getId(), e.getUrl(), event.getPayload(),
                 endpointService.activeSecrets(e.getId(), now)));
     }
@@ -142,6 +142,22 @@ public class DeliveryStateService {
             markDead(d, "retries_exhausted");
         }
         return disabled;
+    }
+
+    /** Re-queues every parked delivery of an endpoint (it was paused or disabled, now active). */
+    @Transactional
+    public int unparkAll(UUID endpointId) {
+        // ponytail: one transaction for all parked rows; batch it if endpoints park 100k+ deliveries
+        int unparked = 0;
+        for (UUID id : deliveries.parkedIds(endpointId)) {
+            Delivery d = deliveries.findForUpdate(id).orElseThrow();
+            if (d.getParkedAt() != null && !d.getStatus().isFinal()) {
+                d.unpark(Times.now(clock));
+                dispatcher.enqueue(d, null);
+                unparked++;
+            }
+        }
+        return unparked;
     }
 
     /**
