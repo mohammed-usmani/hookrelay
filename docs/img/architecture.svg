@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 560" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#1f2433">
+  <title>HookRelay architecture</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#4a5168"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#b5651d"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#c9cedb;stroke-width:1.2}
+      .core{fill:#f3f5fb;stroke:#2f3f9e;stroke-width:1.4}
+      .t{font-weight:600;font-size:14px}
+      .s{fill:#5b6275;font-size:11.5px}
+      .l{fill:#4a5168;font-size:11.5px}
+      .ln{stroke:#4a5168;stroke-width:1.4;fill:none}
+      .rt{stroke:#b5651d;stroke-width:1.4;fill:none;stroke-dasharray:5 4}
+      .rl{fill:#b5651d;font-size:11.5px}
+    </style>
+  </defs>
+
+  <!-- main path -->
+  <rect class="box" x="20" y="110" width="130" height="84" rx="8"/>
+  <text class="t" x="85" y="146" text-anchor="middle">Your backend</text>
+  <text class="s" x="85" y="166" text-anchor="middle">POST /v1/events</text>
+
+  <rect class="core" x="186" y="110" width="176" height="84" rx="8"/>
+  <text class="t" x="274" y="140" text-anchor="middle">HookRelay API</text>
+  <text class="s" x="274" y="160" text-anchor="middle">2 instances</text>
+  <text class="s" x="274" y="177" text-anchor="middle">schema, idempotency key</text>
+
+  <rect class="box" x="390" y="100" width="180" height="104" rx="8"/>
+  <text class="t" x="480" y="128" text-anchor="middle">MariaDB</text>
+  <text class="s" x="480" y="149" text-anchor="middle">event + deliveries + outbox</text>
+  <text class="s" x="480" y="166" text-anchor="middle">in one transaction</text>
+  <text class="s" x="480" y="186" text-anchor="middle">source of truth for state</text>
+
+  <rect class="core" x="598" y="110" width="190" height="84" rx="8"/>
+  <text class="t" x="693" y="140" text-anchor="middle">Outbox relay</text>
+  <text class="s" x="693" y="160" text-anchor="middle">FOR UPDATE SKIP LOCKED</text>
+  <text class="s" x="693" y="177" text-anchor="middle">publisher confirms</text>
+
+  <rect class="box" x="810" y="110" width="150" height="84" rx="8"/>
+  <text class="t" x="885" y="140" text-anchor="middle">RabbitMQ</text>
+  <text class="s" x="885" y="160" text-anchor="middle">work queue</text>
+  <text class="s" x="885" y="177" text-anchor="middle">(quorum)</text>
+
+  <rect class="core" x="1000" y="110" width="160" height="84" rx="8"/>
+  <text class="t" x="1080" y="140" text-anchor="middle">Workers</text>
+  <text class="s" x="1080" y="160" text-anchor="middle">claim, sign, send</text>
+  <text class="s" x="1080" y="177" text-anchor="middle">at-least-once</text>
+
+  <rect class="box" x="1200" y="110" width="105" height="84" rx="8"/>
+  <text class="t" x="1252" y="146" text-anchor="middle">Endpoints</text>
+  <text class="s" x="1252" y="166" text-anchor="middle">customer URLs</text>
+
+  <path class="ln" d="M150 152H182" marker-end="url(#a)"/>
+  <path class="ln" d="M362 152H386" marker-end="url(#a)"/>
+  <path class="ln" d="M570 152H594" marker-end="url(#a)"/>
+  <path class="ln" d="M788 152H806" marker-end="url(#a)"/>
+  <path class="ln" d="M960 152H996" marker-end="url(#a)"/>
+  <path class="ln" d="M1160 152H1196" marker-end="url(#a)"/>
+  <text class="l" x="1180" y="96" text-anchor="middle">HMAC-signed POST</text>
+
+  <!-- claim step -->
+  <rect class="box" x="1000" y="250" width="305" height="112" rx="8"/>
+  <text class="t" x="1016" y="276">Claim, under the endpoint row lock</text>
+  <text class="s" x="1016" y="298">dispatch token: duplicates are dropped</text>
+  <text class="s" x="1016" y="318">circuit breaker: 10 failures open it, one probe</text>
+  <text class="s" x="1016" y="338">rate limit: next send slot kept on the row</text>
+  <text class="s" x="1016" y="354">  (exact across instances, no Redis)</text>
+  <path class="ln" d="M1080 194V246" marker-end="url(#a)"/>
+
+  <!-- retry loop -->
+  <rect class="box" x="810" y="250" width="150" height="112" rx="8"/>
+  <text class="t" x="885" y="278" text-anchor="middle">Delay queues</text>
+  <text class="s" x="885" y="298" text-anchor="middle">TTL tiers</text>
+  <text class="s" x="885" y="318" text-anchor="middle">5s, 5m, 30m, 2h,</text>
+  <text class="s" x="885" y="335" text-anchor="middle">5h, 10h, 10h</text>
+  <path class="rt" d="M885 250V198" marker-end="url(#r)"/>
+  <text class="rl" x="891" y="230">TTL expires</text>
+
+  <path class="rt" d="M1080 362V430H545V208" marker-end="url(#r)"/>
+  <text class="rl" x="812" y="422" text-anchor="middle">failed attempt: result + next retry written to the outbox</text>
+  <path class="rt" d="M693 194V306H806" marker-end="url(#r)"/>
+  <text class="rl" x="701" y="296">retry published</text>
+
+  <!-- side systems -->
+  <rect class="box" x="186" y="250" width="330" height="68" rx="8"/>
+  <text class="t" x="206" y="276">Scheduled jobs (ShedLock, DB time)</text>
+  <text class="s" x="206" y="298">retention, stuck-delivery sweeper, expiry</text>
+  <path class="ln" d="M440 250V208" marker-end="url(#a)"/>
+
+  <rect class="box" x="20" y="470" width="550" height="68" rx="8"/>
+  <text class="t" x="36" y="496">Observability</text>
+  <text class="s" x="36" y="518">Prometheus metrics (attempts, latency, outbox lag, circuits), Grafana, JSON logs</text>
+
+  <rect class="box" x="610" y="470" width="695" height="68" rx="8"/>
+  <text class="t" x="626" y="496">Gives up after 3 days</text>
+  <text class="s" x="626" y="518">delivery marked dead and a delivery.dead event sent; failing endpoints auto-disabled; replay any time</text>
+</svg>

@@ -13,6 +13,10 @@ Java 21 · Spring Boot 4 · MariaDB 11.4 · RabbitMQ 4 · Flyway · Testcontaine
 
 ## Architecture
 
+![HookRelay architecture: ingest, transactional outbox, relay, RabbitMQ work and delay queues, workers, endpoints](docs/img/architecture.svg)
+
+The queues and exchanges in detail:
+
 ```mermaid
 flowchart LR
     P[Producer app] -- "POST /v1/events" --> API
